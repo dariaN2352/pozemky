@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pozemky Prešov</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EEF2EC;--surface:#FFFFFF;--ink:#1D2721;--muted:#5F6B63;--rule:#C9D3CB;--parcel:#2E6B4F;--sab:#4F6FA0;--rev:#9A8F7A;--stake:#D9A21B;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#131915;--surface:#1B231E;--ink:#E4EBE6;--muted:#9AA79F;--rule:#2E3A33;--parcel:#6FBF95;--sab:#8AA8D8;--rev:#B9AD94;--stake:#E8B84A;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+.wrap{max-width:760px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.6rem;margin:0}
+.upd{color:var(--muted);font-size:.9rem;margin:2px 0 18px}
+.zones{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.zones button{font:inherit;border:1.5px solid var(--rule);background:var(--surface);color:var(--ink);padding:6px 12px;border-radius:999px;cursor:pointer}
+.zones button[aria-pressed=true]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.tools{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:.92rem;color:var(--muted);margin-bottom:8px}
+select,input[type=text]{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:5px 8px}
+.row{background:var(--surface);border-left:5px solid var(--parcel);padding:14px 14px 12px;margin-top:10px;border-radius:2px 8px 8px 2px}
+.row[data-zone="Sabinov – PNV"]{border-left-color:var(--sab)}
+.row[data-zone="Na posúdenie"]{border-left-color:var(--rev)}
+.row.dim{opacity:.5}
+.top{display:flex;gap:12px;justify-content:space-between;align-items:baseline}
+.title{color:var(--ink);font-weight:700;text-decoration:none}
+.title:hover,.title:focus-visible{text-decoration:underline}
+.price{font-size:1.45rem;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.facts{color:var(--muted);font-size:.92rem;margin:4px 0 10px;font-variant-numeric:tabular-nums}
+.new{display:inline-block;width:10px;height:10px;background:var(--stake);transform:rotate(45deg);margin-right:8px;vertical-align:1px}
+.act{display:flex;gap:8px;flex-wrap:wrap}
+.act input{flex:1;min-width:160px}
+.empty{padding:40px 0;color:var(--muted)}
+:focus-visible{outline:2px solid var(--parcel);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Pozemky Prešov</h1>
+  <p class="upd" id="upd">Načítavam…</p>
+  <div class="zones" id="zones"></div>
+  <div class="tools">
+    <label>Zoradiť <select id="sort"><option value="new">najnovšie</option><option value="price">cena</option><option value="ppm2">€/m²</option><option value="area">výmera</option></select></label>
+    <label><input type="checkbox" id="hide" checked> skryť zamietnuté a neaktívne</label>
+  </div>
+  <div id="list"></div>
+</div>
+<script>
+const STATUSES=["Nové","Volané","Obhliadka","Zaujímavé","Zamietnuté"];
+const ZONES=["Všetko","Blízko Prešova","Sabinov – PNV","Na posúdenie"];
+let items=[],latest="",zone="Blízko Prešova",st={};
+try{st=JSON.parse(localStorage.getItem("pozemky-stav")||"{}")}catch(e){}
+const save=()=>{try{localStorage.setItem("pozemky-stav",JSON.stringify(st))}catch(e){}};
+const f=(n,u="")=>n?Math.round(n).toLocaleString("sk-SK")+u:"?";
+const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function render(){
+  const z=document.getElementById("zones");
+  z.innerHTML=ZONES.map(n=>{const c=items.filter(i=>(n==="Všetko"||i.zone===n)&&visible(i)).length;
+    return `<button aria-pressed="${n===zone}" data-z="${n}">${n} ${c}</button>`}).join("");
+  z.querySelectorAll("button").forEach(b=>b.onclick=()=>{zone=b.dataset.z;render()});
+  const s=document.getElementById("sort").value;
+  const key={new:i=>-(Date.parse(i.first_seen)||0),price:i=>i.price||9e9,ppm2:i=>i.ppm2||9e9,area:i=>-(i.area||0)}[s];
+  const rows=items.filter(i=>(zone==="Všetko"||i.zone===zone)&&visible(i)).sort((a,b)=>key(a)-key(b));
+  const L=document.getElementById("list");
+  if(!rows.length){L.innerHTML=`<p class="empty">V tejto zóne zatiaľ nič nie je. Skús „Všetko“ alebo vypni skrývanie.</p>`;return}
+  L.innerHTML=rows.map(i=>{const my=st[i.id]||{};const dim=!i.active||my.s==="Zamietnuté";
+    return `<article class="row${dim?" dim":""}" data-zone="${esc(i.zone)}">
+    <div class="top"><a class="title" href="${esc(i.url)}" target="_blank" rel="noopener">${i.first_seen===latest?'<span class="new" title="Nové dnes"></span>':""}${esc(i.title)}</a>
+    <span class="price">${f(i.price," €")}</span></div>
+    <div class="facts">${esc(i.obec||"obec ?")} · ${f(i.area," m²")} · ${f(i.ppm2," €/m²")}${i.price_estimated?" · cena odhadnutá z €/m²":""} · ${i.source} · od ${new Date(i.first_seen).toLocaleDateString("sk-SK")}${(i.price_history||[]).length?" · pôvodne "+f(i.price_history[0][1]," €"):""}${i.active?"":" · už nie je v ponuke"}</div>
+    <div class="act"><select data-id="${esc(i.id)}" aria-label="Stav">${STATUSES.map(x=>`<option${(my.s||"Nové")===x?" selected":""}>${x}</option>`).join("")}</select>
+    <input type="text" data-id="${esc(i.id)}" placeholder="Poznámka (telefón, dohoda…)" value="${esc(my.n)}" aria-label="Poznámka"></div></article>`}).join("");
+  L.querySelectorAll("select").forEach(e=>e.onchange=()=>{(st[e.dataset.id]??={}).s=e.value;save();render()});
+  L.querySelectorAll("input").forEach(e=>e.onchange=()=>{(st[e.dataset.id]??={}).n=e.value;save()});
+}
+const visible=i=>!document.getElementById("hide").checked||(i.active&&(st[i.id]||{}).s!=="Zamietnuté");
+document.getElementById("sort").onchange=render;document.getElementById("hide").onchange=render;
+
+Promise.all([fetch("listings.json").then(r=>r.ok?r.json():{}),fetch("meta.json").then(r=>r.ok?r.json():{}).catch(()=>({}))])
+.then(([d,m])=>{items=Object.values(d).filter(i=>!i.dup_of);latest=items.reduce((a,i)=>i.first_seen>a?i.first_seen:a,"");
+  document.getElementById("upd").textContent=m.updated?`Aktualizované ${new Date(m.updated).toLocaleString("sk-SK")}`:"Zatiaľ bez dát – spusti workflow na GitHube.";render()})
+.catch(()=>{document.getElementById("upd").textContent="Dáta sa nenačítali – spusti workflow na GitHube."});
+</script>
+</body>
+</html>

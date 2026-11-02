@@ -1,0 +1,78 @@
+# ==== Pozemky Prešov – nastavenia ====
+# Všetko tu môžeš meniť bez zásahu do kódu.
+
+max_price: 80000        # € celkom
+min_area: 350           # m², menšie pozemky sa vyhodia (ak je výmera známa)
+inactive_after_days: 3  # inzerát, ktorý zmizol z portálu, sa označí ako neaktívny
+
+# Zdroje. {page} = číslo strany (1, 2, …), {offset} = posun po 20 (Bazoš).
+# Reality.sk a TopReality.sk netreba – patria do skupiny Nehnuteľnosti.sk
+# a majú tie isté inzeráty (aj Reality Hofer, TUreality, Archeus atď.).
+sources:
+  - name: bazos
+    base: "https://reality.bazos.sk/"
+    id_regex: "/inzerat/(\\d+)/"
+    urls:
+      # okruh 25 km od PSČ 080 01, kategória Pozemky, do 80 000 €
+      - "https://reality.bazos.sk/predam/pozemok/{offset}?hledat=&rubriky=reality&hlokalita=08001&humkreis=25&cenaod=&cenado=80000&Submit=H%C4%BEada%C5%A5&kitx=ano"
+    max_pages: 15
+  - name: nehnutelnosti
+    base: "https://www.nehnutelnosti.sk/"
+    id_regex: "/detail/([\\w-]+)/"
+    expect_title: "pozem"   # ochrana: zlá URL vracia celé Slovensko
+    urls:
+      # všetky pozemky (aj "orná pôda" určená územným plánom na RD) – typ stráži must_have
+      - "https://www.nehnutelnosti.sk/vysledky/pozemky/okres-presov/predaj?priceTo=80000&order=NEWEST&page={page}"
+      - "https://www.nehnutelnosti.sk/vysledky/pozemky/okres-sabinov/predaj?priceTo=80000&order=NEWEST&page={page}"
+    max_pages: 10
+  - name: kingreal
+    base: "https://www.kingreal.sk/"
+    id_regex: "/nehnutelnost/(\\d+)-"
+    urls: ["https://www.kingreal.sk/pozemky"]   # zoradené od najnovších
+  - name: realityspolu
+    base: "https://realityspolu.sk/"
+    id_regex: "/detail/([0-9a-f-]{36})"
+    timeout: 90            # pomalý web
+    urls: ["https://realityspolu.sk/hledani/prodej/pozemky?locale=sk_SK&page={page}"]
+    max_pages: 4
+  - name: zoomreality
+    base: "https://www.zoomreality.sk/"
+    id_regex: "/nehnutelnost/(\\d+)-"
+    urls: ["https://www.zoomreality.sk/nehnutelnosti?specie=Pozemky"]
+
+# Zóny podľa priority. Vzory sú bez diakritiky a malými písmenami
+# (regex), aby chytili aj skloňovanie: "v Kanaši", "vo Finticiach"...
+zones:
+  - name: "Blízko Prešova"
+    obce:
+      Prešov: "\\bpresov|solivar|salgovik|sarisske luky"
+      Fintice: "fintic"
+      Veľký Šariš: "velk\\w* saris"
+      Kanaš: "\\bkanas"
+      Dulova Ves: "dulov\\w* (ves|vsi)"
+  - name: "Sabinov – PNV"
+    obce:
+      Sabinov: "\\bsabinov"
+      Pečovská Nová Ves: "pecovsk|\\bpnv\\b"
+      Šarišské Michaľany: "sarisk\\w* michal"
+    
+# Tieto obce nechceš – inzerát sa zahodí.
+blacklist:
+  Nižná Šebastová: "nizn\\w* sebastov"
+  Župčany: "zupcan"
+  Orkucany: "orkucan"
+  # smer Košice
+  Haniska: "\\bhanisk"
+  Kendice: "kendic"
+  Petrovany: "petrovan"
+  Drienov: "drienov"
+  Lemešany: "lemesan"
+  Janovík: "janovik"
+  Záborské: "zaborsk"
+  Bretejovce: "bretejov"
+  Ličartovce: "licartov"
+  Šarišské Bohdanovce: "sarisk\\w* bohdanov"
+
+# Typ pozemku
+must_have: "stavebn|\\bibv\\b|individualn\\w* bytov|rodinn\\w* dom|vystavb\\w* (rd|domu|domov)|na stavbu|pozemok pre (rodinne|bytovu)"
+title_reject: "orn\\w* pod|polnohosp|\\bttp\\b|travn\\w* porast|\\bles\\b|lesn|chat|zahradk|zahrad[ay]\\b|vinic|luk[ay]\\b|rekreac|priemysel|komercn|garaz|prenaj|kupim|hladam|predane|rezervovane"
